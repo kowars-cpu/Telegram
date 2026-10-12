@@ -2,29 +2,29 @@ name: Build Telegram APK
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - "apk-*"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: telegram-android-build
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
@@ -32,23 +32,15 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: >-
-            platform-tools
-            platforms;android-36
-            build-tools;36.0.0
-            ndk;27.2.12479018
-            cmake;3.22.1
 
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk/27.2.12479018
-            /usr/local/lib/android/sdk/cmake/3.22.1
-            /usr/local/lib/android/sdk/build-tools/36.0.0
-            /usr/local/lib/android/sdk/platforms/android-36
-          key: android-sdk-ubuntu-2204-ndk27-cmake3221-v1
+      - name: Install Android components
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.22.1"
 
       - name: Build Debug APK
         run: |
@@ -56,10 +48,24 @@ jobs:
           ./gradlew :TMessagesProj:assembleDebug \
             --build-cache --parallel --console=plain
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Find APK
+        id: apk
+        shell: bash
+        run: |
+          APK="$(find TMessagesProj/build/outputs/apk \
+            -type f -name '*.apk' -print -quit)"
+          if [ -z "$APK" ]; then
+            echo "APK_NOT_FOUND: Gradle did not produce an APK in the expected directory."
+            find TMessagesProj/build/outputs -type f 2>/dev/null || true
+            exit 1
+          fi
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "Found APK: $APK"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: Telegram-Debug-APK
-          path: TMessagesProj/build/outputs/apk/**/*.apk
-          if-no-files-found: error
-          retention-days: 7
+          tag_name: apk-${{ github.run_number }}
+          name: Telegram APK build ${{ github.run_number }}
+          files: ${{ steps.apk.outputs.path }}
+          generate_release_notes: false
