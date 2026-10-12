@@ -35,6 +35,7 @@ jobs:
         with:
           accept-android-sdk-licenses: false
           packages: platform-tools
+          packages: platform-tools
 
       - name: Accept Android SDK licenses
         shell: bash
