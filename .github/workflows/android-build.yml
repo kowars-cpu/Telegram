@@ -30,29 +30,31 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Configure Android SDK
-        run: |
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-          find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -n 1)"
-          test -n "$SDKMANAGER"
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          "$SDKMANAGER" --version
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: >-
+            platform-tools
+            platforms;android-36
+            build-tools;36.0.0
+            ndk;27.2.12479018
+            cmake;3.22.1
 
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          yes | "$SDKMANAGER" --licenses
-
-      - name: Install Android components
-        run: |
-          "$SDKMANAGER" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/ndk/27.2.12479018
+            /usr/local/lib/android/sdk/cmake/3.22.1
+            /usr/local/lib/android/sdk/build-tools/36.0.0
+            /usr/local/lib/android/sdk/platforms/android-36
+          key: android-sdk-ubuntu-2204-ndk27-cmake3221-v1
 
       - name: Build Debug APK
         run: |
           chmod +x gradlew
-          ./gradlew :TMessagesProj:assembleDebug --build-cache --parallel --console=plain
+          ./gradlew :TMessagesProj:assembleDebug \
+            --build-cache --parallel --console=plain
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
